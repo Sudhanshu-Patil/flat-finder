@@ -7,12 +7,14 @@ const PROTOCOL = '2025-06-18';
 const SITE = 'https://flat-finder.pages.dev';
 const cache = new Map();
 
+const builtCities = (env, origin) => env.ASSETS.fetch(new Request(`${origin}/data/cities.json`)).then((r) => r.json());
+
 async function city(env, origin, id) {
   if (!cache.has(id)) {
     const res = await env.ASSETS.fetch(new Request(`${origin}/data/${id}.json`));
     if (!res.ok) {
-      const built = await env.ASSETS.fetch(new Request(`${origin}/data/cities.json`)).then((r) => r.json()).catch(() => ({}));
-      throw new Error(`Unknown city "${id}". Built cities: ${Object.keys(built).join(', ') || 'gurgaon'}`);
+      const built = await builtCities(env, origin).catch(() => ({}));
+      throw new Error(`Unknown city "${id}". Built cities: ${Object.keys(built).join(', ')}`);
     }
     cache.set(id, await res.json());
   }
@@ -21,8 +23,9 @@ async function city(env, origin, id) {
 
 const KINDS = ['apartment', 'builder floor', 'villa', 'plot', 'commercial', 'other'];
 const PLACES = ['park', 'metro', 'rail', 'school', 'hospital', 'shopping'];
+const CITY_ARG = { type: 'string', description: 'City id as in the site URL (?city=). Defaults to the first built city; an unknown id returns the list of built cities.' };
 const FILTERS = {
-  city: { type: 'string', description: 'City id, e.g. "gurgaon"', default: 'gurgaon' },
+  city: CITY_ARG,
   mode: { type: 'string', enum: ['buy', 'rent'], default: 'buy', description: 'Which price the budget and price sorting use' },
   localities: { type: 'array', items: { type: 'string' }, description: 'Sectors or localities, e.g. ["Sector 56", "Golf Course Road"] or ["56", "57"]. Matches the locality exactly, or as its start ("Sohna" also matches "Sohna Road"). Use list_localities to see names.' },
   name_contains: { type: 'string', description: 'Words that must appear in the society name, developer or locality, e.g. "DLF" or "Ireo"' },
@@ -63,17 +66,17 @@ const TOOLS = [
   {
     name: 'list_localities',
     description: 'Every sector or locality in a city with its number of societies and its centre point. Use to find the exact locality names.',
-    inputSchema: { type: 'object', properties: { city: { type: 'string', default: 'gurgaon' }, contains: { type: 'string' } } },
+    inputSchema: { type: 'object', properties: { city: CITY_ARG, contains: { type: 'string' } } },
   },
   {
     name: 'get_society',
     description: 'Full details for one society by name: unit types and bedroom sizes with sources, buy and rent prices per BHK, resident ratings by category, review snippets, description, nearby places, amenities and links.',
-    inputSchema: { type: 'object', properties: { city: { type: 'string', default: 'gurgaon' }, name: { type: 'string' } }, required: ['name'] },
+    inputSchema: { type: 'object', properties: { city: CITY_ARG, name: { type: 'string' } }, required: ['name'] },
   },
   {
     name: 'compare_societies',
     description: 'Side-by-side comparison of up to 10 societies by name: per-BHK prices, rents, sizes, smallest bedrooms, score, rating, nearby, amenities.',
-    inputSchema: { type: 'object', properties: { city: { type: 'string', default: 'gurgaon' }, mode: { type: 'string', enum: ['buy', 'rent'], default: 'buy' }, names: { type: 'array', items: { type: 'string' }, maxItems: 10 } }, required: ['names'] },
+    inputSchema: { type: 'object', properties: { city: CITY_ARG, mode: { type: 'string', enum: ['buy', 'rent'], default: 'buy' }, names: { type: 'array', items: { type: 'string' }, maxItems: 10 } }, required: ['names'] },
   },
 ];
 
@@ -225,7 +228,7 @@ function detail(s, extra, cid) {
 }
 
 async function callTool(name, args, env, origin) {
-  const id = args.city || 'gurgaon';
+  const id = args.city || Object.keys(await builtCities(env, origin))[0];
   const data = await city(env, origin, id);
   if (name === 'search_societies' || name === 'breakdown') {
     const crit = criteria(args);

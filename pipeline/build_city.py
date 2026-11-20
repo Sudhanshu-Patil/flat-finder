@@ -21,9 +21,11 @@ import verified
 ROOT = pathlib.Path(__file__).parent
 OUT = ROOT / "out"
 WEB = ROOT.parent / "web" / "public" / "data"
-GENERIC = {"the", "of", "at", "in", "sector", "gurgaon", "gurugram", "pune", "residency", "residences", "homes",
+GENERIC = {"the", "of", "at", "in", "sector", "residency", "residences", "homes",
            "apartments", "apartment", "towers", "tower", "heights", "city", "phase", "park", "estate",
            "floors", "society", "cghs", "group", "housing", "and", "by", "new", "greens", "green", "plaza"}
+# city names are filler in project names too ("Pune Heights"), for every configured city
+GENERIC |= {w for k, c in json.loads((ROOT.parent / "data" / "cities.json").read_text()).items() for w in (k, *c["name"].lower().split())}
 TOWER_H = 55.0  # visual default height (m) for generated apartment towers; shapes are not data
 
 
@@ -222,12 +224,12 @@ def shapes_for(s, area, bld_grid, sid_seed):
     return feats, shape
 
 
-def main(city="gurgaon"):
+def main(city):
     cfg = json.loads((ROOT.parent / "data" / "cities.json").read_text())[city]
     out = OUT / city
     raw = json.loads((out / "mb_projects.json").read_text())
-    bs, bw, bn, be = cfg["bbox"]  # 0.2 deg margin keeps fringe projects, still drops geocodes in the wrong city
-    located = [p for p in raw if p.get("lat") and p.get("lng") and bs - 0.2 < p["lat"] < bn + 0.2 and bw - 0.2 < p["lng"] < be + 0.2]
+    bs, bw, bn, be = cfg["bbox"]  # 0.15 deg margin keeps fringe projects, still drops geocodes in the wrong city
+    located = [p for p in raw if p.get("lat") and p.get("lng") and bs - 0.15 < p["lat"] < bn + 0.15 and bw - 0.15 < p["lng"] < be + 0.15]
     not_located = len(raw) - len(located)
     projects = dedupe(located)
     areas = json.loads((out / "osm_areas.geojson").read_text())["features"]
@@ -501,4 +503,4 @@ def write_csv(soc_path, unit_path, societies):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "gurgaon")
+    main(sys.argv[1] if len(sys.argv) > 1 else sys.exit(__doc__))
